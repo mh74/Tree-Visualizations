@@ -1,0 +1,124 @@
+---
+title: "Dynamic Tree S&P500"
+author: "rvisualization"
+date: "September 3, 2016"
+output: 
+    html_document:
+      toc: true
+      toc_float: true
+      theme: flatly
+      highlight: zenburn
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Packages
+```{r setup, include=FALSE}
+library(quantmod)
+library(rvest)
+library(reshape2)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(DT)
+library(wordcloud2)
+library(taucharts)
+library(highcharter)
+library(ggplot2)
+library(plotly)
+library(sunburstR)
+library(RColorBrewer)
+library(treemap)
+library(grid)
+```
+
+
+
+## Data
+```{r data,cache=TRUE}
+## Retrieving the Data
+SP500_wiki <- read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+
+SP500_data <- SP500_wiki %>%
+  html_nodes("table") %>%
+  .[[1]] %>%
+  html_table()
+
+SP500_Weight <- read_html("http://siblisresearch.com/data/market-caps-sp-100-us/")
+SP500_WD <- SP500_Weight %>%
+  html_nodes("table") %>%
+  .[[1]] %>%
+  html_table()
+```
+
+
+```{r,results='hide',cache=TRUE}
+## Retrieving the Quotes
+SP500_EOD <- getQuote(SP500_data$`Ticker symbol`)
+```
+
+
+```{r dplyr}
+## dplyr data manipulation 
+SP500_data <- SP500_data %>% rename(Ticker=`Ticker symbol`) 
+
+SP500_EOD <- SP500_EOD %>% add_rownames(var="Ticker") %>% 
+  mutate(perc_change = as.numeric(gsub("%","",`% Change`))/100)
+
+SP500_All <- SP500_data %>% select(Ticker,Security,`GICS Sector`,`GICS Sub Industry`) %>% 
+  full_join(SP500_EOD) %>%
+  mutate(Volume=as.numeric(Volume))
+
+SP500_Tot <- SP500_WD %>% select(Ticker, `2015`) %>% right_join(SP500_All)
+
+Top10 <- SP500_All %>% arrange(desc(perc_change)) %>% head(10)
+Bottom10 <- SP500_All %>% arrange(perc_change) %>% head(10)
+Top_Volume <-   SP500_All %>% arrange(desc(Volume)) %>% head(10)
+
+### Below is creating the right format for the sunburst plot
+Test2 <- SP500_Tot %>% select(Ticker, `GICS Sector`,`GICS Sub Industry`,`2015`) %>%
+  rename(`GICS_Sector`=`GICS Sector`,`GICS_Sub_Industry` = `GICS Sub Industry`) %>% 
+  mutate(GICS_Sector=str_replace_all(GICS_Sector,fixed(" "),"")) %>% 
+  mutate(GICS_Sub_Industry=str_replace_all(GICS_Sub_Industry,fixed(" "),"")) %>%
+  mutate(GICS_Sub_Industry=str_replace_all(GICS_Sub_Industry,"&","")) %>%
+  mutate(MarketCap= as.numeric(str_replace_all(`2015`,",",""))*1000000) %>% 
+  unite(Test_Unite,GICS_Sector,GICS_Sub_Industry,Ticker,sep="-") %>% 
+  drop_na()
+```
+
+
+
+
+Treemap
+==========================================================================
+
+Row {data-height=800}
+-----------------------------------------------------------------------
+
+### S&P 500 Previous Day Close 
+
+```{r, fig.keep="none"}
+SP500_tm <- SP500_Tot %>% mutate(MarketCap= as.numeric(str_replace_all(`2015`,",",""))*1000000) %>%
+  mutate(perc_change = perc_change * 100) %>%
+  treemap(index=c("GICS Sector","GICS Sub Industry","Ticker"),
+              vSize = "MarketCap", vColor = "perc_change",
+              type = "value",draw = FALSE,vp=viewport(x=0.1,y=0.1))
+```
+
+```{r}
+output$tm <-  renderHighchart(highchart(height = 800) %>% 
+  hc_add_series_treemap(SP500_tm,
+                        allowDrillToNode = TRUE,
+                        layoutAlgorithm = "squarified",
+                        name = "tmdata") %>% 
+  hc_tooltip(pointFormat = "<b>{point.name}</b>:<br>
+             Volume: {point.value:,.0f}<br>
+             Change: {point.valuecolor:,.000f}"))
+
+highchartOutput("tm")
+```
+
+
