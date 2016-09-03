@@ -11,12 +11,12 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, error = FALSE,message = FALSE)
 ```
 
 
 ## Packages
-```{r setup, include=FALSE}
+```{r}
 library(quantmod)
 library(rvest)
 library(reshape2)
@@ -38,7 +38,7 @@ library(grid)
 
 
 ## Data
-```{r data,cache=TRUE}
+```{r data}
 ## Retrieving the Data
 SP500_wiki <- read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
 
@@ -54,13 +54,13 @@ SP500_WD <- SP500_Weight %>%
   html_table()
 ```
 
-
-```{r,results='hide',cache=TRUE}
+## Quotes
+```{r,results='hide'}
 ## Retrieving the Quotes
 SP500_EOD <- getQuote(SP500_data$`Ticker symbol`)
 ```
 
-
+## Manipulation
 ```{r dplyr}
 ## dplyr data manipulation 
 SP500_data <- SP500_data %>% rename(Ticker=`Ticker symbol`) 
@@ -90,15 +90,7 @@ Test2 <- SP500_Tot %>% select(Ticker, `GICS Sector`,`GICS Sub Industry`,`2015`) 
 ```
 
 
-
-
-Treemap
-==========================================================================
-
-Row {data-height=800}
------------------------------------------------------------------------
-
-### S&P 500 Previous Day Close 
+## S&P 500 Previous Day Close 
 
 ```{r, fig.keep="none"}
 SP500_tm <- SP500_Tot %>% mutate(MarketCap= as.numeric(str_replace_all(`2015`,",",""))*1000000) %>%
@@ -109,16 +101,14 @@ SP500_tm <- SP500_Tot %>% mutate(MarketCap= as.numeric(str_replace_all(`2015`,",
 ```
 
 ```{r}
-output$tm <-  renderHighchart(highchart(height = 800) %>% 
+  highchart() %>% 
   hc_add_series_treemap(SP500_tm,
                         allowDrillToNode = TRUE,
                         layoutAlgorithm = "squarified",
                         name = "tmdata") %>% 
   hc_tooltip(pointFormat = "<b>{point.name}</b>:<br>
              Volume: {point.value:,.0f}<br>
-             Change: {point.valuecolor:,.000f}"))
-
-highchartOutput("tm")
+             Change: {point.valuecolor:,.000f}")
 ```
 
 
